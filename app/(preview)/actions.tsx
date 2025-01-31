@@ -1,3 +1,4 @@
+// app/(preview)/actions.tsx
 import { Message, TextStreamMessage } from "@/components/message";
 import { openai } from "@ai-sdk/openai";
 import { CoreMessage, generateId } from "ai";
@@ -9,36 +10,16 @@ import {
 } from "ai/rsc";
 import { ReactNode } from "react";
 import { z } from "zod";
-import { CameraView } from "@/components/camera-view";
-import { HubView } from "@/components/hub-view";
-import { UsageView } from "@/components/usage-view";
-
-export interface Hub {
-  climate: Record<"low" | "high", number>;
-  lights: Array<{ name: string; status: boolean }>;
-  locks: Array<{ name: string; isLocked: boolean }>;
-}
-
-let hub: Hub = {
-  climate: {
-    low: 23,
-    high: 25,
-  },
-  lights: [
-    { name: "patio", status: true },
-    { name: "kitchen", status: false },
-    { name: "garage", status: true },
-  ],
-  locks: [{ name: "back door", isLocked: true }],
-};
+// Import the Sandpack component that renders code sent by the model.
+import SandpackActionReceiver from "@/components/SandpackActionReceiver";
 
 const sendMessage = async (message: string) => {
   "use server";
 
-  const messages = getMutableAIState<typeof AI>("messages");
+  const messagesState = getMutableAIState<typeof AI>("messages");
 
-  messages.update([
-    ...(messages.get() as CoreMessage[]),
+  messagesState.update([
+    ...(messagesState.get() as CoreMessage[]),
     { role: "user", content: message },
   ]);
 
@@ -46,128 +27,44 @@ const sendMessage = async (message: string) => {
   const textComponent = <TextStreamMessage content={contentStream.value} />;
 
   const { value: stream } = await streamUI({
-    model: openai("gpt-4o"),
+    model: openai("gpt-4o-mini"),
     system: `\
-      - you are a friendly home automation assistant
-      - reply in lower case
-    `,
-    messages: messages.get() as CoreMessage[],
+- you are a friendly code assistant
+- reply in lower case
+`,
+    messages: messagesState.get() as CoreMessage[],
     text: async function* ({ content, done }) {
       if (done) {
-        messages.done([
-          ...(messages.get() as CoreMessage[]),
+        messagesState.done([
+          ...(messagesState.get() as CoreMessage[]),
           { role: "assistant", content },
         ]);
-
         contentStream.done();
       } else {
         contentStream.update(content);
       }
-
       return textComponent;
     },
     tools: {
-      viewCameras: {
-        description: "view current active cameras",
-        parameters: z.object({}),
-        generate: async function* ({}) {
-          const toolCallId = generateId();
-
-          messages.done([
-            ...(messages.get() as CoreMessage[]),
-            {
-              role: "assistant",
-              content: [
-                {
-                  type: "tool-call",
-                  toolCallId,
-                  toolName: "viewCameras",
-                  args: {},
-                },
-              ],
-            },
-            {
-              role: "tool",
-              content: [
-                {
-                  type: "tool-result",
-                  toolName: "viewCameras",
-                  toolCallId,
-                  result: `The active cameras are currently displayed on the screen`,
-                },
-              ],
-            },
-          ]);
-
-          return <Message role="assistant" content={<CameraView />} />;
-        },
-      },
-      viewHub: {
+      renderSandpackCode: {
         description:
-          "view the hub that contains current quick summary and actions for temperature, lights, and locks",
-        parameters: z.object({}),
-        generate: async function* ({}) {
-          const toolCallId = generateId();
-
-          messages.done([
-            ...(messages.get() as CoreMessage[]),
-            {
-              role: "assistant",
-              content: [
-                {
-                  type: "tool-call",
-                  toolCallId,
-                  toolName: "viewHub",
-                  args: {},
-                },
-              ],
-            },
-            {
-              role: "tool",
-              content: [
-                {
-                  type: "tool-result",
-                  toolName: "viewHub",
-                  toolCallId,
-                  result: hub,
-                },
-              ],
-            },
-          ]);
-
-          return <Message role="assistant" content={<HubView hub={hub} />} />;
-        },
-      },
-      updateHub: {
-        description: "update the hub with new values",
+          "Render a live code preview using the provided React component code.",
         parameters: z.object({
-          hub: z.object({
-            climate: z.object({
-              low: z.number(),
-              high: z.number(),
-            }),
-            lights: z.array(
-              z.object({ name: z.string(), status: z.boolean() }),
-            ),
-            locks: z.array(
-              z.object({ name: z.string(), isLocked: z.boolean() }),
-            ),
-          }),
+          code: z.string().min(1, "Code must be a valid React component. Example: 'export default function MyComponent() { return <div>Hello</div> }'"),
         }),
-        generate: async function* ({ hub: newHub }) {
-          hub = newHub;
+        generate: async function* ({ code }) {
           const toolCallId = generateId();
 
-          messages.done([
-            ...(messages.get() as CoreMessage[]),
+          messagesState.done([
+            ...(messagesState.get() as CoreMessage[]),
             {
               role: "assistant",
               content: [
                 {
                   type: "tool-call",
                   toolCallId,
-                  toolName: "updateHub",
-                  args: { hub },
+                  toolName: "renderSandpackCode",
+                  args: { code },
                 },
               ],
             },
@@ -176,53 +73,19 @@ const sendMessage = async (message: string) => {
               content: [
                 {
                   type: "tool-result",
-                  toolName: "updateHub",
+                  toolName: "renderSandpackCode",
                   toolCallId,
-                  result: `The hub has been updated with the new values`,
-                },
-              ],
-            },
-          ]);
-
-          return <Message role="assistant" content={<HubView hub={hub} />} />;
-        },
-      },
-      viewUsage: {
-        description: "view current usage for electricity, water, or gas",
-        parameters: z.object({
-          type: z.enum(["electricity", "water", "gas"]),
-        }),
-        generate: async function* ({ type }) {
-          const toolCallId = generateId();
-
-          messages.done([
-            ...(messages.get() as CoreMessage[]),
-            {
-              role: "assistant",
-              content: [
-                {
-                  type: "tool-call",
-                  toolCallId,
-                  toolName: "viewUsage",
-                  args: { type },
-                },
-              ],
-            },
-            {
-              role: "tool",
-              content: [
-                {
-                  type: "tool-result",
-                  toolName: "viewUsage",
-                  toolCallId,
-                  result: `The current usage for ${type} is currently displayed on the screen`,
+                  result: `Rendering the provided code in a live preview.`,
                 },
               ],
             },
           ]);
 
           return (
-            <Message role="assistant" content={<UsageView type={type} />} />
+            <Message
+              role="assistant"
+              content={<SandpackActionReceiver code={code} />}
+            />
           );
         },
       },
@@ -245,14 +108,11 @@ export const AI = createAI<AIState, UIState>({
     messages: [],
   },
   initialUIState: [],
-  actions: {
-    sendMessage,
-  },
+  actions: { sendMessage },
   onSetAIState: async ({ state, done }) => {
     "use server";
-
     if (done) {
-      // save to database
+      // Optionally, save to a database.
     }
   },
 });
