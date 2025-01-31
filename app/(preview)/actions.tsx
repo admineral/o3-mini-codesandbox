@@ -26,73 +26,78 @@ const sendMessage = async (message: string) => {
   const contentStream = createStreamableValue("");
   const textComponent = <TextStreamMessage content={contentStream.value} />;
 
-  const { value: stream } = await streamUI({
-    model: openai("gpt-4o-mini"),
-    system: `\
+  try {
+    const { value: stream } = await streamUI({
+      model: openai("gpt-4o-mini"),
+      system: `\
 - you are a friendly code assistant
 - reply in lower case
 `,
-    messages: messagesState.get() as CoreMessage[],
-    text: async function* ({ content, done }) {
-      if (done) {
-        messagesState.done([
-          ...(messagesState.get() as CoreMessage[]),
-          { role: "assistant", content },
-        ]);
-        contentStream.done();
-      } else {
-        contentStream.update(content);
-      }
-      return textComponent;
-    },
-    tools: {
-      renderSandpackCode: {
-        description:
-          "Render a live code preview using the provided React component code.",
-        parameters: z.object({
-          code: z.string().min(1, "Code must be a valid React component. Example: 'export default function MyComponent() { return <div>Hello</div> }'"),
-        }),
-        generate: async function* ({ code }) {
-          const toolCallId = generateId();
-
+      messages: messagesState.get() as CoreMessage[],
+      text: async function* ({ content, done }) {
+        if (done) {
           messagesState.done([
             ...(messagesState.get() as CoreMessage[]),
-            {
-              role: "assistant",
-              content: [
-                {
-                  type: "tool-call",
-                  toolCallId,
-                  toolName: "renderSandpackCode",
-                  args: { code },
-                },
-              ],
-            },
-            {
-              role: "tool",
-              content: [
-                {
-                  type: "tool-result",
-                  toolName: "renderSandpackCode",
-                  toolCallId,
-                  result: `Rendering the provided code in a live preview.`,
-                },
-              ],
-            },
+            { role: "assistant", content },
           ]);
+          contentStream.done();
+        } else {
+          contentStream.update(content);
+        }
+        return textComponent;
+      },
+      tools: {
+        renderSandpackCode: {
+          description:
+            "Render a live code preview using the provided React component code.",
+          parameters: z.object({
+            code: z.string().min(1, "Code must be a valid React component. Example: 'export default function MyComponent() { return <div>Hello</div> }'"),
+          }),
+          generate: async function* ({ code }) {
+            const toolCallId = generateId();
 
-          return (
-            <Message
-              role="assistant"
-              content={<SandpackActionReceiver code={code} />}
-            />
-          );
+            messagesState.done([
+              ...(messagesState.get() as CoreMessage[]),
+              {
+                role: "assistant",
+                content: [
+                  {
+                    type: "tool-call",
+                    toolCallId,
+                    toolName: "renderSandpackCode",
+                    args: { code },
+                  },
+                ],
+              },
+              {
+                role: "tool",
+                content: [
+                  {
+                    type: "tool-result",
+                    toolName: "renderSandpackCode",
+                    toolCallId,
+                    result: `Rendering the provided code in a live preview.`,
+                  },
+                ],
+              },
+            ]);
+
+            return (
+              <Message
+                role="assistant"
+                content={<SandpackActionReceiver code={code} />}
+              />
+            );
+          },
         },
       },
-    },
-  });
+    });
 
-  return stream;
+    return stream;
+  } catch (error) {
+    contentStream.done();
+    throw error;
+  }
 };
 
 export type UIState = Array<ReactNode>;

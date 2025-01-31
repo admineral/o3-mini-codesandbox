@@ -14,21 +14,25 @@ export const TextStreamMessage = ({
   const [text] = useStreamableValue(content);
 
   return (
-    <motion.div
-      className={`flex flex-row gap-4 px-4 w-full md:w-[500px] md:px-0 first-of-type:pt-20`}
-      initial={{ y: 5, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-    >
-      <div className="size-[24px] flex flex-col justify-center items-center flex-shrink-0 text-zinc-400">
-        <BotIcon />
-      </div>
+    <div className="px-4">
+      <div className="ml-0 max-w-[700px]">
+        <motion.div
+          className="flex flex-row gap-2 first-of-type:pt-4 mt-1"
+          initial={{ y: 5, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+        >
+          <div className="size-[24px] flex flex-col justify-center items-center flex-shrink-0 text-zinc-400">
+            <BotIcon />
+          </div>
 
-      <div className="flex flex-col gap-1 w-full">
-        <div className="text-zinc-800 dark:text-zinc-300 flex flex-col gap-4">
-          <Markdown>{text}</Markdown>
-        </div>
+          <div className="flex flex-col gap-1 w-full">
+            <div className="text-zinc-800 dark:text-zinc-300 flex flex-col gap-2">
+              <Markdown>{text}</Markdown>
+            </div>
+          </div>
+        </motion.div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 
@@ -39,21 +43,33 @@ export const Message = ({
   role: "assistant" | "user";
   content: string | ReactNode;
 }) => {
-  return (
-    <motion.div
-      className={`flex flex-row gap-4 px-4 w-full md:w-[500px] md:px-0 first-of-type:pt-20`}
-      initial={{ y: 5, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-    >
-      <div className="size-[24px] flex flex-col justify-center items-center flex-shrink-0 text-zinc-400">
-        {role === "assistant" ? <BotIcon /> : <UserIcon />}
-      </div>
+  const containsSandpack = typeof content === 'string' ? 
+    content.includes('Sandpack') : 
+    String(content).includes('Sandpack');
 
-      <div className="flex flex-col gap-1 w-full">
-        <div className="text-zinc-800 dark:text-zinc-300 flex flex-col gap-4">
-          {content}
-        </div>
+  return (
+    <div className={containsSandpack ? 'w-full' : 'px-4'}>
+      <div className={containsSandpack ? 'w-full' : 'ml-0 max-w-[700px]'}>
+        <motion.div
+          className={`flex flex-row gap-2 ${
+            containsSandpack 
+              ? 'first-of-type:pt-8 mt-2 px-4' 
+              : 'first-of-type:pt-4 mt-1'
+          }`}
+          initial={{ y: 5, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+        >
+          <div className="size-[24px] flex flex-col justify-center items-center flex-shrink-0 text-zinc-400">
+            {role === "assistant" ? <BotIcon /> : <UserIcon />}
+          </div>
+
+          <div className="flex flex-col gap-1 w-full">
+            <div className="text-zinc-800 dark:text-zinc-300 flex flex-col gap-2">
+              {content}
+            </div>
+          </div>
+        </motion.div>
       </div>
-    </motion.div>
+    </div>
   );
 };
